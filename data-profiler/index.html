@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Profiler — Tools</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="../assets/shared.css">
+</head>
+<body>
+<nav class="hub-nav">
+  <a href="../">⌂ Tools</a>
+  <span class="sep">/</span>
+  <span class="current">data-profiler</span>
+</nav>
+
+<div class="app">
+  <header class="tool-header">
+    <h1>Data Profiler</h1>
+    <p class="subtitle">Drop in a file for instant column stats — nulls, uniqueness, type, and range — before it goes into a pipeline.</p>
+  </header>
+
+  <div class="upload-grid single">
+    <div class="drop-zone" id="zone-a">
+      <input type="file" accept=".xlsx,.xls,.csv">
+      <div class="drop-icon">📄</div>
+      <div class="drop-label" id="label-a">File — Profile this</div>
+      <div class="drop-sub" id="sub-a">Click or drag .xlsx / .csv</div>
+    </div>
+  </div>
+
+  <div class="run-row">
+    <button class="btn-primary" id="run-btn" onclick="profile()" disabled>Profile →</button>
+  </div>
+
+  <div class="error-banner" id="error-banner"></div>
+
+  <div class="results" id="results">
+    <div class="summary-grid cols-4">
+      <div class="stat-card">
+        <div class="stat-label">Total rows</div>
+        <div class="stat-value" id="cnt-rows">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total columns</div>
+        <div class="stat-value" id="cnt-cols">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Columns with nulls</div>
+        <div class="stat-value changed" id="cnt-nullcols">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Fully unique columns</div>
+        <div class="stat-value added" id="cnt-uniquecols">0</div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <button class="btn-secondary push-right" onclick="exportResults()">⬇ Export .xlsx</button>
+    </div>
+
+    <div id="profile-table"></div>
+  </div>
+</div>
+
+<script src="../assets/shared.js"></script>
+<script>
+const { val, escHtml } = TOOLS;
+
+let data = [], headers = [];
+let profileRows = [];
+
+document.addEventListener('DOMContentLoaded', () => {
+  TOOLS.setupDropZone(document.getElementById('zone-a'), loadFile);
+});
+
+function loadFile(file) {
+  TOOLS.parseSpreadsheet(file, (err, rows, hdrs) => {
+    if (err) { TOOLS.showError('error-banner', err); return; }
+    TOOLS.showError('error-banner', '');
+    data = rows; headers = hdrs;
+    document.getElementById('label-a').textContent = file.name;
+    document.getElementById('sub-a').textContent = rows.length + ' rows · ' + headers.length + ' columns';
+    document.getElementById('zone-a').classList.add('loaded');
+    document.getElementById('run-btn').disabled = false;
+  });
+}
+
+function isNumeric(s) {
+  return s !== '' && !isNaN(s) && !isNaN(parseFloat(s));
+}
+function isDateLike(s) {
+  if (isNumeric(s)) return false;
+  const d = new Date(s);
+  return !isNaN(d.getTime()) && /\d/.test(s);
+}
+function isBooleanLike(s) {
+  return ['true', 'false', 'yes', 'no'].includes(String(s).toLowerCase());
+}
+
+function inferColumnType(values) {
+  const nonEmpty = values.filter(v => v !== '');
+  if (!nonEmpty.length) return 'Empty';
+  if (nonEmpty.every(isNumeric)) return 'Number';
+  if (nonEmpty.every(isBooleanLike)) return 'Boolean';
+  if (nonEmpty.every(isDateLike)) return 'Date';
+  return 'Text';
+}
+
+function profile() {
+  TOOLS.showError('error-banner', '');
+  profileRows = headers.map(col => {
+    const values = data.map(row => val(row[col]));
+    const nonEmpty = values.filter(v => v !== '');
+    const nullCount = values.length - nonEmpty.length;
+    const uniqueSet = new Set(nonEmpty);
+    const type = inferColumnType(values);
+
+    let min = '', max = '';
+    if (type === 'Number') {
+      const nums = nonEmpty.map(Number);
+      min = Math.min(...nums);
+      max = Math.max(...nums);
+    } else if (type === 'Date') {
+      const dates = nonEmpty.map(v => new Date(v).getTime());
+      min = new Date(Math.min(...dates)).toISOString().slice(0, 10);
+      max = new Date(Math.max(...dates)).toISOString().slice(0, 10);
+    }
+
+    return {
+      column: col,
+      type,
+      nonNull: nonEmpty.length,
+      nulls: nullCount,
+      nullPct: values.length ? ((nullCount / values.length) * 100).toFixed(1) : '0.0',
+      unique: uniqueSet.size,
+      isFullyUnique: uniqueSet.size === nonEmpty.length && nonEmpty.length === data.length && data.length > 0,
+      min, max
+    };
+  });
+
+  document.getElementById('cnt-rows').textContent = data.length;
+  document.getElementById('cnt-cols').textContent = headers.length;
+  document.getElementById('cnt-nullcols').textContent = profileRows.filter(r => r.nulls > 0).length;
+  document.getElementById('cnt-uniquecols').textContent = profileRows.filter(r => r.isFullyUnique).length;
+  document.getElementById('results').classList.add('visible');
+  renderTable();
+}
+
+function typeBadgeClass(type) {
+  if (type === 'Number') return 'added';
+  if (type === 'Date') return 'changed';
+  if (type === 'Empty') return 'removed';
+  return 'neutral';
+}
+
+function renderTable() {
+  const wrap = document.getElementById('profile-table');
+  let html = '<div class="table-wrap"><table><thead><tr>';
+  html += '<th>Column</th><th>Type</th><th>Non-null</th><th>Nulls</th><th>Null %</th><th>Unique</th><th>Min</th><th>Max</th>';
+  html += '</tr></thead><tbody>';
+
+  profileRows.forEach(r => {
+    html += '<tr' + (r.nulls > 0 ? ' class="row-removed"' : '') + '>';
+    html += `<td><strong>${escHtml(r.column)}</strong></td>`;
+    html += `<td><span class="badge ${typeBadgeClass(r.type)}">${r.type}</span></td>`;
+    html += `<td>${r.nonNull}</td>`;
+    html += `<td>${r.nulls}</td>`;
+    html += `<td>${r.nullPct}%</td>`;
+    html += `<td>${r.unique}${r.isFullyUnique ? ' <span class="badge added">unique</span>' : ''}</td>`;
+    html += `<td>${escHtml(r.min)}</td>`;
+    html += `<td>${escHtml(r.max)}</td>`;
+    html += '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  wrap.innerHTML = html;
+}
+
+function exportResults() {
+  if (!profileRows.length) return;
+  const rows = profileRows.map(r => ({
+    Column: r.column,
+    Type: r.type,
+    'Non-null': r.nonNull,
+    Nulls: r.nulls,
+    'Null %': r.nullPct + '%',
+    Unique: r.unique,
+    'Fully Unique': r.isFullyUnique ? 'Yes' : 'No',
+    Min: r.min,
+    Max: r.max
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Profile');
+  XLSX.writeFile(wb, 'data-profile.xlsx');
+}
+</script>
+</body>
+</html>
