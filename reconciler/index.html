@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Reconciler — Tools</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>(function(){try{var t=localStorage.getItem('tools-theme');if(t&&t!=='default')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <link rel="stylesheet" href="../assets/shared.css">
 </head>
 <body>
@@ -126,6 +127,7 @@ let activeKeyCount = 1;
 document.addEventListener('DOMContentLoaded', () => {
   TOOLS.setupDropZone(document.getElementById('zone-a'), file => loadFile(file, 'a'));
   TOOLS.setupDropZone(document.getElementById('zone-b'), file => loadFile(file, 'b'));
+  TOOLS.initThemeSwitcher();
 });
 
 function setKeyCount(n, btn) {
