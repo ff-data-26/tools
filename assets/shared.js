@@ -76,5 +76,43 @@ const TOOLS = (function () {
     b.style.display = msg ? 'block' : 'none';
   }
 
-  return { parseSpreadsheet, setupDropZone, val, makeKey, escHtml, showError };
+  // ── Theme switcher ──────────────────────────────────────────
+  // Injects a small fixed-position swatch picker. Selection is
+  // stored in localStorage under 'tools-theme' and read on every
+  // page load (see the inline snippet in each page's <head>,
+  // which applies it before first paint to avoid a flash).
+  const THEMES = [
+    { id: 'default', label: 'Default', swatch: '#eae7df' },
+    { id: 'sky',     label: 'Sky',     swatch: '#cfe2ef' },
+    { id: 'sage',    label: 'Sage',    swatch: '#d6e4cd' },
+    { id: 'dusk',    label: 'Dusk',    swatch: '#ddd2ee' }
+  ];
+
+  function applyTheme(id, persist) {
+    if (id === 'default') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', id);
+    if (persist) localStorage.setItem('tools-theme', id);
+    const bar = document.querySelector('.theme-switcher');
+    if (bar) {
+      Array.from(bar.children).forEach((el, i) => el.classList.toggle('active', THEMES[i].id === id));
+    }
+  }
+
+  function initThemeSwitcher() {
+    const current = document.documentElement.getAttribute('data-theme') || 'default';
+    const bar = document.createElement('div');
+    bar.className = 'theme-switcher';
+    THEMES.forEach(t => {
+      const btn = document.createElement('button');
+      btn.className = 'theme-swatch' + (t.id === current ? ' active' : '');
+      btn.style.background = t.swatch;
+      btn.title = t.label;
+      btn.setAttribute('aria-label', 'Theme: ' + t.label);
+      btn.addEventListener('click', () => applyTheme(t.id, true));
+      bar.appendChild(btn);
+    });
+    document.body.appendChild(bar);
+  }
+
+  return { parseSpreadsheet, setupDropZone, val, makeKey, escHtml, showError, initThemeSwitcher };
 })();
