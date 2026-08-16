@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tools</title>
+<link rel="stylesheet" href="assets/shared.css">
+<style>
+  /* Landing-page-only tweaks */
+  .footnote { margin-top: 2rem; color: var(--text-faint); font-size: 11.5px; font-family: var(--mono); }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="hub-header">
+    <h1>Tools</h1>
+    <p class="subtitle">Small offline utilities for data cleanup, QA, and reference. Everything runs client-side — nothing you upload ever leaves the browser.</p>
+  </div>
+
+  <div class="tool-grid">
+
+    <a class="tool-card" href="reconciler/">
+      <div class="tool-card-top">
+        <span class="tool-card-name">Reconciler</span>
+        <span class="status-dot live">live</span>
+      </div>
+      <p class="tool-card-desc">Compare two spreadsheets by 1–3 key columns and see only what's added, missing, or changed. Export the diff to .xlsx.</p>
+      <span class="tool-card-path">/reconciler/</span>
+    </a>
+
+    <div class="tool-card planned">
+      <div class="tool-card-top">
+        <span class="tool-card-name">Duplicate Finder</span>
+        <span class="status-dot">planned</span>
+      </div>
+      <p class="tool-card-desc">Flag duplicate rows within one file using a single or composite key, before it causes a bad sync or load.</p>
+      <span class="tool-card-path">/duplicate-finder/</span>
+    </div>
+
+    <div class="tool-card planned">
+      <div class="tool-card-top">
+        <span class="tool-card-name">Data Profiler</span>
+        <span class="status-dot">planned</span>
+      </div>
+      <p class="tool-card-desc">Drop in a file and get instant column stats — null counts, unique counts, min/max, type mismatches.</p>
+      <span class="tool-card-path">/data-profiler/</span>
+    </div>
+
+    <div class="tool-card planned">
+      <div class="tool-card-top">
+        <span class="tool-card-name">Excel ↔ SQL / DAX Reference</span>
+        <span class="status-dot">planned</span>
+      </div>
+      <p class="tool-card-desc">Searchable cheat sheet — look up a common Excel formula and see its SQL and DAX equivalents side by side.</p>
+      <span class="tool-card-path">/excel-sql-reference/</span>
+    </div>
+
+  </div>
+
+  <p class="footnote">github.com/&lt;username&gt;/tools</p>
+</div>
+</body>
+</html>
