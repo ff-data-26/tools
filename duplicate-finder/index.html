@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duplicate Finder — Tools</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="../assets/shared.css">
+</head>
+<body>
+<nav class="hub-nav">
+  <a href="../">⌂ Tools</a>
+  <span class="sep">/</span>
+  <span class="current">duplicate-finder</span>
+</nav>
+
+<div class="app">
+  <header class="tool-header">
+    <h1>Duplicate Finder</h1>
+    <p class="subtitle">Find rows that share the same key — catch duplicate IDs before they cause a bad sync or load.</p>
+  </header>
+
+  <div class="upload-grid single">
+    <div class="drop-zone" id="zone-a">
+      <input type="file" accept=".xlsx,.xls,.csv">
+      <div class="drop-icon">📄</div>
+      <div class="drop-label" id="label-a">File — Check for duplicates</div>
+      <div class="drop-sub" id="sub-a">Click or drag .xlsx / .csv</div>
+    </div>
+  </div>
+
+  <div class="config-panel">
+    <div class="config-panel-header">
+      <span class="config-panel-title">Match rows by</span>
+      <div class="segmented-btns">
+        <button class="segmented-btn active" onclick="setKeyCount(1,this)">1 key</button>
+        <button class="segmented-btn" onclick="setKeyCount(2,this)">2 keys</button>
+        <button class="segmented-btn" onclick="setKeyCount(3,this)">3 keys</button>
+      </div>
+    </div>
+    <div class="config-rows">
+      <div class="config-row" id="key-row-1" style="grid-template-columns: 20px 1fr;">
+        <div class="config-row-num">1</div>
+        <div class="field">
+          <label>Key column</label>
+          <select id="key-1"><option value="">— load file —</option></select>
+        </div>
+      </div>
+      <div class="config-row hidden" id="key-row-2" style="grid-template-columns: 20px 1fr;">
+        <div class="config-row-num">2</div>
+        <div class="field">
+          <label>Key column</label>
+          <select id="key-2"><option value="">— load file —</option></select>
+        </div>
+      </div>
+      <div class="config-row hidden" id="key-row-3" style="grid-template-columns: 20px 1fr;">
+        <div class="config-row-num">3</div>
+        <div class="field">
+          <label>Key column</label>
+          <select id="key-3"><option value="">— load file —</option></select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="run-row">
+    <button class="btn-primary" id="run-btn" onclick="findDuplicates()" disabled>Find duplicates →</button>
+  </div>
+
+  <div class="error-banner" id="error-banner"></div>
+
+  <div class="results" id="results">
+    <div class="summary-grid cols-4">
+      <div class="stat-card">
+        <div class="stat-label">Total rows</div>
+        <div class="stat-value" id="cnt-total">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Unique keys</div>
+        <div class="stat-value" id="cnt-unique">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Duplicate groups</div>
+        <div class="stat-value changed" id="cnt-groups">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Duplicate rows</div>
+        <div class="stat-value removed" id="cnt-rows">0</div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <button class="btn-secondary push-right" onclick="exportResults()">⬇ Export .xlsx</button>
+    </div>
+
+    <div id="dup-table"></div>
+  </div>
+</div>
+
+<script src="../assets/shared.js"></script>
+<script>
+const { val, makeKey, escHtml } = TOOLS;
+
+let data = [], headers = [];
+let activeKeyCount = 1;
+let duplicateGroups = [];
+let currentKeys = [];
+
+document.addEventListener('DOMContentLoaded', () => {
+  TOOLS.setupDropZone(document.getElementById('zone-a'), loadFile);
+});
+
+function setKeyCount(n, btn) {
+  activeKeyCount = n;
+  document.querySelectorAll('.segmented-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  for (let i = 1; i <= 3; i++) {
+    document.getElementById('key-row-' + i).classList.toggle('hidden', i > n);
+  }
+}
+
+function loadFile(file) {
+  TOOLS.parseSpreadsheet(file, (err, rows, hdrs) => {
+    if (err) { TOOLS.showError('error-banner', err); return; }
+    TOOLS.showError('error-banner', '');
+    data = rows; headers = hdrs;
+    for (let i = 1; i <= 3; i++) {
+      const sel = document.getElementById('key-' + i);
+      sel.innerHTML = headers.map(h => `<option value="${escHtml(h)}">${escHtml(h)}</option>`).join('');
+    }
+    document.getElementById('label-a').textContent = file.name;
+    document.getElementById('sub-a').textContent = rows.length + ' rows · ' + headers.length + ' columns';
+    document.getElementById('zone-a').classList.add('loaded');
+    document.getElementById('run-btn').disabled = false;
+  });
+}
+
+function findDuplicates() {
+  TOOLS.showError('error-banner', '');
+  const keys = [];
+  for (let i = 1; i <= activeKeyCount; i++) {
+    const k = document.getElementById('key-' + i).value;
+    if (!k) { TOOLS.showError('error-banner', 'Please select a key column for all active key rows.'); return; }
+    keys.push(k);
+  }
+  currentKeys = keys;
+
+  const groupsMap = new Map();
+  data.forEach(row => {
+    const k = makeKey(row, keys);
+    if (!k.replace(/\u0000/g, '').length) return; // skip blank keys
+    if (!groupsMap.has(k)) groupsMap.set(k, []);
+    groupsMap.get(k).push(row);
+  });
+
+  duplicateGroups = Array.from(groupsMap.values()).filter(g => g.length > 1);
+
+  const totalDupRows = duplicateGroups.reduce((sum, g) => sum + g.length, 0);
+  document.getElementById('cnt-total').textContent = data.length;
+  document.getElementById('cnt-unique').textContent = groupsMap.size;
+  document.getElementById('cnt-groups').textContent = duplicateGroups.length;
+  document.getElementById('cnt-rows').textContent = totalDupRows;
+  document.getElementById('results').classList.add('visible');
+  renderTable();
+}
+
+function renderTable() {
+  const wrap = document.getElementById('dup-table');
+  if (!duplicateGroups.length) {
+    wrap.innerHTML = '<div class="empty-state">No duplicates found for this key.</div>';
+    return;
+  }
+
+  const otherCols = headers.filter(h => !currentKeys.includes(h));
+
+  let html = '<div class="table-wrap"><table><thead><tr><th>Group</th>';
+  currentKeys.forEach(k => { html += `<th class="key-col">${escHtml(k)}</th>`; });
+  otherCols.forEach(c => { html += `<th>${escHtml(c)}</th>`; });
+  html += '</tr></thead><tbody>';
+
+  duplicateGroups.forEach((group, gi) => {
+    group.forEach(row => {
+      html += `<tr class="row-removed"><td><span class="badge removed">Group ${gi + 1}</span></td>`;
+      currentKeys.forEach(k => { html += `<td><strong>${escHtml(val(row[k]))}</strong></td>`; });
+      otherCols.forEach(c => { html += `<td>${escHtml(val(row[c]))}</td>`; });
+      html += '</tr>';
+    });
+  });
+
+  html += '</tbody></table></div>';
+  wrap.innerHTML = html;
+}
+
+function exportResults() {
+  if (!duplicateGroups.length) return;
+  const otherCols = headers.filter(h => !currentKeys.includes(h));
+
+  const rows = [];
+  duplicateGroups.forEach((group, gi) => {
+    group.forEach(row => {
+      const r = { Group: gi + 1 };
+      currentKeys.forEach(k => { r[k] = val(row[k]); });
+      otherCols.forEach(c => { r[c] = val(row[c]); });
+      rows.push(r);
+    });
+  });
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Duplicates');
+  XLSX.writeFile(wb, 'duplicate-rows.xlsx');
+}
+</script>
+</body>
+</html>
